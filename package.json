@@ -1,0 +1,29 @@
+{
+  "name": "the-office-quotes-api",
+  "version": "1.0.0",
+  "description": "REST API for requesting random quotes from The Office",
+  "main": "src/server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tomcat-42/the-office-quotes-api.git"
+  },
+  "keywords": [
+    "the",
+    "office",
+    "quotes",
+    "api"
+  ],
+  "author": "Pablo Hugen",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Tomcat-42/the-office-quotes-api/issues"
+  },
+  "homepage": "https://github.com/Tomcat-42/the-office-quotes-api#readme",
+  "devDependencies": {
+    "eslint": "^7.2.0",
+    "prettier": "^2.0.5"
+  }
+}
