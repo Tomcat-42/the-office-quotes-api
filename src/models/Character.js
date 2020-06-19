@@ -2,6 +2,7 @@
  * Character Model
  * @module Character
  * @class Character
+ * @returns Character
  */
 
 const mongoose = require("mongoose");

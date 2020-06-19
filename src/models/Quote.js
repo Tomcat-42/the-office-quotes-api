@@ -13,7 +13,7 @@ const mongoosePaginate = require("mongoose-paginate");
  * @returns mongoose.Schema
  */
 const QuoteSchema = new mongoose.Schema({
-    character: { type: mongoose.Schema.Types.ObjectId, require: "Character" },
+    character: { type: mongoose.Schema.Types.ObjectId, ref: "Character" },
     quote: { type: String, required: true },
 });
 

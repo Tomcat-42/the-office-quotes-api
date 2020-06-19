@@ -2,6 +2,7 @@
  * Conversation Model
  * @module Conversation
  * @class Conversation
+ * @returns Conversation
  */
 
 const mongoose = require("mongoose");
@@ -13,7 +14,7 @@ const mongoosePaginate = require("mongoose-paginate");
  * @returns mongoose.Schema
  */
 const ConversationSchema = new mongoose.Schema({
-    quotes: { type: [mongoose.Schema.Types.ObjectId], require: "Quote" },
+    quotes: { type: [mongoose.Schema.Types.ObjectId], ref: "Quote" },
 });
 
 ConversationSchema.plugin(mongoosePaginate);
