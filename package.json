@@ -1,10 +1,11 @@
 {
   "name": "the-office-quotes-api",
   "version": "1.0.0",
-  "description": "REST API for requesting random quotes from The Office",
+  "description": "REST API for requesting quotes from The Office Us",
   "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "npx nodemon src/server.js",
+    "doc": "npx jsdoc -r src/ -d doc/"
   },
   "repository": {
     "type": "git",
@@ -25,5 +26,14 @@
   "devDependencies": {
     "eslint": "^7.2.0",
     "prettier": "^2.0.5"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "helmet": "^3.23.1",
+    "jsdoc": "^3.6.4",
+    "mongoose": "^5.9.19",
+    "mongoose-paginate": "^5.0.3"
   }
 }
