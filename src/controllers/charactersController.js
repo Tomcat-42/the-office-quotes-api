@@ -76,30 +76,62 @@ class CharacterController {
      * @async
      * @static
      * @method
-     * @param {Request} req - req.query.name contains the string used for searching
+     * @param {Request} req - req.query.names array contains thes strings used for searching
      * @param {Response} res - the body is a JSON with the information to be returned
      * @returns {Response}
      */
     static async search(req, res) {
         try {
-            const { name, page = 1 } = req.query;
-            let result;
+            const { names, page = 1 } = req.query;
 
-            if (name) {
-                const regex = new RegExp(name, "i");
-
-                result = await Character.paginate(
-                    {
-                        name: { $regex: regex },
-                    },
-                    { page: Number(page), limit: 20, select: "_id name" }
-                );
+            if (names) {
+                names.forEach((name, index) => {
+                    names[index] = new RegExp(name, "i");
+                });
             }
+
+            const result = await Character.paginate(
+                {
+                    name: { $in: names },
+                },
+                { page: Number(page), limit: 20, select: "_id name" }
+            );
 
             if (result) {
                 result.characters = result.docs;
                 delete result.docs;
                 return res.status(200).json({ status: "ok", result });
+            } else {
+                return res.status(400).json({ status: "not found" });
+            }
+        } catch (error) {
+            console.error(`Error on showing character: ${error.message}`);
+            return res.status(500).json({ status: "error" });
+        }
+    }
+
+    /**
+     * Returns a random character.
+     *
+     * @async
+     * @static
+     * @method
+     * @param {Request} req - the body of the request is not used
+     * @param {Response} res - the body is a JSON with the information to be returned
+     * @returns {Response}
+     */
+    static async random(req, res) {
+        try {
+            const character = await Character.aggregate([
+                { $project: { _id: 1, name: 1 } },
+                { $sample: { size: 1 } },
+            ]);
+
+            if (character) {
+                return res.status(200).json({
+                    status: "ok",
+                    result: { character: character[0] },
+                });
             } else {
                 return res.status(400).json({ status: "not found" });
             }
