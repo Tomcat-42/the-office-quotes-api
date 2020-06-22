@@ -9,9 +9,16 @@ const Character = require("../models/Character");
  */
 class QuoteController {
     /**
-     * Quotes Index, returns a document with a field "result" containing:
-     * the quotes, the total number of quotes, total number of pages,
-     * current page and the total number of documents in the current page.
+     * Quotes Index, returns a document with the fields:
+     *
+     * result: the quotes in the current page;
+     * total: the total number of quotes;
+     * limit: the number of quotes per page;
+     * pages: the total number of pages;
+     * page: the current page;
+     * status: "ok" if any quote has returned,
+     * "not found" if no quote returned or
+     * "error" if a error occured in the server;
      *
      * @async
      * @static
@@ -22,8 +29,11 @@ class QuoteController {
      */
     static async index(req, res) {
         try {
-            const { page = 1 } = req.query;
+            /* Pagination number and limit*/
+            const page = Number(req.query.page) || 1;
+            const limit = Number(process.env.PAGINATION_LIMIT);
 
+            /* query the episodes for appending in the quotes */
             const episodes = await Episode.find(
                 {},
                 { conversations: 1, name: 1, number: 1, season: 1 }
@@ -33,13 +43,14 @@ class QuoteController {
                 select: "quotes",
             });
 
+            /* query all the quotes */
             const quotes = await Quote.paginate(
                 {},
                 {
                     sort: { _id: 1 },
                     select: "_id quote character",
-                    page: Number(page),
-                    limit: 20,
+                    page,
+                    limit,
                     populate: {
                         path: "character",
                         model: "Character",
@@ -48,42 +59,48 @@ class QuoteController {
                 }
             );
 
-            const result = {};
+            /* returns the conversations, if any */
+            if (quotes.total !== 0) {
+                const responseObject = {
+                    limit: quotes.limit,
+                    page: quotes.page,
+                    pages: quotes.pages,
+                    total: quotes.total,
+                    status: "ok",
+                };
 
-            result.quotes = quotes.docs.map((quote) => {
-                const retObj = {};
-                const epObj = {};
+                responseObject.result = quotes.docs.map((quote) => {
+                    const quoteObject = {
+                        _id: quote._id,
+                        character: quote.character,
+                        quote: quote.quote,
+                    };
+                    const episodeObject = {};
 
-                retObj._id = quote._id;
-                retObj.character = quote.character;
-                retObj.quote = quote.quote;
+                    /* NOTE: not nice , change it later */
+                    let breakFlag = false;
+                    for (const ep of episodes) {
+                        for (const conv of ep.conversations)
+                            if (conv.quotes.includes(quote._id)) {
+                                episodeObject.name = ep.name;
+                                episodeObject.number = ep.number;
+                                episodeObject.season = ep.season;
 
-                /* NOTE: not nice */
-                let breakFlag = false;
-                for (const ep of episodes) {
-                    for (const conv of ep.conversations)
-                        if (conv.quotes.includes(quote._id)) {
-                            epObj.name = ep.name;
-                            epObj.number = ep.number;
-                            epObj.season = ep.season;
+                                breakFlag = true;
 
-                            breakFlag = true;
+                                break;
+                            }
+                        if (breakFlag) break;
+                    }
+                    quoteObject.episode = episodeObject;
 
-                            break;
-                        }
-                    if (breakFlag) break;
-                }
-                retObj.episode = epObj;
+                    return quoteObject;
+                });
 
-                return retObj;
-            });
-
-            result.limit = quotes.limit;
-            result.page = quotes.page;
-            result.pages = quotes.pages;
-            result.total = quotes.total;
-
-            return await res.status(200).json({ status: "ok", result });
+                return await res.status(200).json(responseObject);
+            } else {
+                return res.status(400).json({ status: "not found" });
+            }
         } catch (error) {
             console.error(`Error on listing characters: ${error.message}`);
             return res.status(500).json({ status: "error" });
@@ -93,6 +110,21 @@ class QuoteController {
     /**
      * Quotes searching by names, quote content, episodes and seasons,
      *
+     * req.query.seasons: Array containing a list of integers, will match all quotes
+     * which is in any of the seasons in the array.
+     * req.query.episodes: Array containing a list of integers, will match all quotes
+     * which is in any of the episodes in the array.
+     * req.query.names: Array containing a list of strings, will match all quotes which
+     * character name match any of the regexes in the array names (names[i] => /names[i]/i).
+     * req.query.quotes : Array containing a list of strings, will match all quotes
+     * which content match any of the regexes in the array quotes(quotes[i] => /quotes[i]/i).
+     *
+     * returns a document with a fields:
+     *
+     * result: the conversations;
+     * status: "ok" if any conversations has returned,
+     * "not found" if no conversations returned or
+     * "error" if a error occured in the server (for example a invalid query string);
      * The seasons array will match all quotes which is in any of the
      * seasons in the array.
      * The episodes array will match all quotes which is in any of
@@ -112,43 +144,55 @@ class QuoteController {
      */
     static async search(req, res) {
         try {
-            const { page = 1, seasons, episodes, names, quotes } = req.query;
+            /* Pagination number and limit */
+            const page = Number(req.query.page) || 1;
+            const limit = Number(process.env.PAGINATION_LIMIT);
 
-            /* The collections queries initialy all empty,
-             * so will match all quotes */
+            /*
+             * The collections queries initialy all empty,
+             * so will match all conversations
+             */
             const episodeQuery = {};
             const characterQuery = {};
             const quoteQuery = {};
             const conversationQuery = {};
 
             /* If search parameters are present, narrows the queries */
-            if (seasons) {
-                seasons.forEach((season, index) => {
-                    seasons[index] = Number(season);
+            if (req.query.seasons) {
+                const seasons = Array(req.query.seasons).flat(1);
+                seasons.forEach((s, i) => {
+                    seasons[i] = Number(s);
                 });
                 episodeQuery.season = { $in: seasons };
             }
 
-            if (episodes) {
-                episodes.forEach((ep, index) => {
-                    episodes[index] = Number(ep);
+            if (req.query.episodes) {
+                const episodes = Array(req.query.episodes).flat(1);
+                episodes.forEach((e, i) => {
+                    episodes[i] = Number(e);
                 });
                 episodeQuery.number = { $in: episodes };
             }
 
-            if (names) {
-                names.forEach((name, index) => {
-                    names[index] = new RegExp(name, "i");
+            if (req.query.names) {
+                const names = Array(req.query.names).flat(1);
+                names.forEach((n, i) => {
+                    names[i] = new RegExp(n, "i");
                 });
                 characterQuery.name = { $in: names };
             }
 
-            if (quotes) {
-                quotes.forEach((quote, index) => {
-                    quotes[index] = new RegExp(quote, "i");
+            if (req.query.quotes) {
+                const quotes = Array(req.query.quotes).flat(1);
+                quotes.forEach((q, i) => {
+                    quotes[i] = new RegExp(q, "i");
                 });
                 quoteQuery.quote = { $in: quotes };
             }
+
+            /*
+             * NOTE: use the mongo aggregation framework.
+             */
 
             /* Scary hack to narrow the conversations to the search parameters */
             const charactersMatched = await Character.find(characterQuery, {
@@ -185,8 +229,8 @@ class QuoteController {
             const quotesSearch = await Quote.paginate(quoteQuery, {
                 sort: { _id: 1 },
                 select: "_id quote character",
-                page: Number(page),
-                limit: 20,
+                page,
+                limit,
                 populate: {
                     path: "character",
                     model: "Character",
@@ -194,42 +238,49 @@ class QuoteController {
                 },
             });
 
-            const result = {};
+            /* returns the conversations, if any */
+            if (quotesSearch.total !== 0) {
+                const responseObject = {
+                    limit: quotesSearch.limit,
+                    page: quotesSearch.page,
+                    pages: quotesSearch.pages,
+                    total: quotesSearch.total,
+                    status: "ok",
+                };
 
-            result.quotes = quotesSearch.docs.map((quote) => {
-                const retObj = {};
-                const epObj = {};
+                /* Appends episode information to the quotes */
+                responseObject.result = quotesSearch.docs.map((quote) => {
+                    const quoteObject = {
+                        _id: quote._id,
+                        character: quote.character,
+                        quote: quote.quote,
+                    };
+                    const episodeObject = {};
 
-                retObj._id = quote._id;
-                retObj.character = quote.character;
-                retObj.quote = quote.quote;
+                    /* NOTE: not nice, change it later */
+                    let breakFlag = false;
+                    for (const ep of episodesMatched) {
+                        for (const conv of ep.conversations)
+                            if (conv.quotes.includes(quote._id)) {
+                                episodeObject.name = ep.name;
+                                episodeObject.number = ep.number;
+                                episodeObject.season = ep.season;
 
-                /* NOTE: not nice */
-                let breakFlag = false;
-                for (const ep of episodesMatched) {
-                    for (const conv of ep.conversations)
-                        if (conv.quotes.includes(quote._id)) {
-                            epObj.name = ep.name;
-                            epObj.number = ep.number;
-                            epObj.season = ep.season;
+                                breakFlag = true;
 
-                            breakFlag = true;
+                                break;
+                            }
+                        if (breakFlag) break;
+                    }
+                    quoteObject.episode = episodeObject;
 
-                            break;
-                        }
-                    if (breakFlag) break;
-                }
-                retObj.episode = epObj;
+                    return quoteObject;
+                });
 
-                return retObj;
-            });
-
-            result.limit = quotesSearch.limit;
-            result.page = quotesSearch.page;
-            result.pages = quotesSearch.pages;
-            result.total = quotesSearch.total;
-
-            return await res.status(200).json({ status: "ok", result });
+                return await res.status(200).json(responseObject);
+            } else {
+                return res.status(400).json({ status: "not found" });
+            }
         } catch (error) {
             console.error(`Error on listing characters: ${error.message}`);
             return res.status(500).json({ status: "error" });
@@ -237,8 +288,12 @@ class QuoteController {
     }
 
     /**
-     * Individual Quote listing by id, returns a json with
-     * the conversation in result.conversation.
+     * Individual Quote listing by id, returns a document with the fields:
+     *
+     * result: the quotes in the current page;
+     * status: "ok" if a quote has returned,
+     * "not found" if no quote returned or
+     * "error" if a error occured in the server;
      *
      * @async
      * @static
@@ -251,6 +306,7 @@ class QuoteController {
         try {
             const _id = String(req.params.id);
 
+            /* Query  the quote */
             const quote = await Quote.findOne(
                 { _id },
                 { _id: 1, character: 1, quote: 1 }
@@ -260,39 +316,35 @@ class QuoteController {
                 select: "_id name",
             });
 
+            /* Other queries to append episode information */
             const conversation = await Conversation.findOne(
                 { quotes: { _id } },
                 { _id: 1 }
             );
-
             const episode = await Episode.findOne({
                 conversations: { _id: conversation._id },
             });
 
-            // const episode = await Episode.aggregate([
-            //     {
-            //         $lookup: {
-            //             from: "conversations",
-            //             localField: "conversations",
-            //             foreignField: "_id",
-            //             as: "conversations",
-            //         },
-            //     },
-            //     { $match: { conversations: { $elemMatch: { quotes: _id } } } },
-            // ]);
-
+            /* returns the quote, if found */
             if (quote && episode) {
-                const q = {};
-                q._id = quote._id;
-                q.episode = {
+                quote.episode = {
                     name: episode.name,
                     season: episode.season,
                     number: episode.number,
                 };
-                q.quote = quote.quote;
-                q.character = quote.character;
 
-                return await res.status(200).json({ status: "ok", result: q });
+                const responseObject = {
+                    result: {
+                        _id: quote._id,
+                        character: quote.character,
+                        quote: quote.quote,
+                        episode: quote.episode,
+                    },
+
+                    status: "ok",
+                };
+
+                return await res.status(200).json(responseObject);
             } else {
                 return res.status(400).json({ status: "not found" });
             }
@@ -303,7 +355,12 @@ class QuoteController {
     }
 
     /**
-     * Returns a random quote.
+     * Returns a document with the fields:
+     *
+     * result: a random quote;
+     * status: "ok" if the quote has returned,
+     * "not found" if no quote returned or
+     * "error" if a error occured in the server;
      *
      * @async
      * @static
@@ -314,9 +371,12 @@ class QuoteController {
      */
     static async random(req, res) {
         try {
+            /* Total number of quotes */
             const size = await Quote.countDocuments();
+            /* random number in the interval [0, size) */
             const rnd = Math.floor(Math.random() * size);
 
+            /* Query a random quote */
             const quote = await Quote.findOne(
                 {},
                 {
@@ -331,31 +391,36 @@ class QuoteController {
                     model: "Character",
                     select: "_id name",
                 });
-
+            
+            /* Other queries to append episode information */
             const conversation = await Conversation.findOne(
                 { quotes: quote._id },
                 { _id: 1 }
             );
-
             const episode = await Episode.findOne({
                 conversations: { _id: conversation._id },
             });
-
+            
+            /* returns the quote, if found */
             if (quote && episode) {
-                const q = {};
-                q._id = quote._id;
-                q.episode = {
+                quote.episode = {
                     name: episode.name,
                     season: episode.season,
                     number: episode.number,
                 };
-                q.quote = quote.quote;
-                q.character = quote.character;
 
-                return res.status(200).json({
+                const responseObject = {
+                    result: {
+                        _id: quote._id,
+                        character: quote.character,
+                        quote: quote.quote,
+                        episode: quote.episode,
+                    },
+
                     status: "ok",
-                    result: { "quote": q },
-                });
+                };
+
+                return await res.status(200).json(responseObject);
             } else {
                 return res.status(400).json({ status: "not found" });
             }

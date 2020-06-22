@@ -9,9 +9,16 @@ const Character = require("../models/Character");
  */
 class ConversationController {
     /**
-     * Conversations Index, returns a document with a field "result" containing: 
-     * the conversations, the total number of characters, total number of pages,
-     * current page and the total number of documents in the current page.
+     * Conversations Index, returns a document with the fields:
+     *
+     * result: the conversations in the current page;
+     * total: the total number of conversations;
+     * limit: the number of conversations per page;
+     * pages: the total number of pages;
+     * page: the current page;
+     * status: "ok" if any conversations has returned,
+     * "not found" if no conversations returned or
+     * "error" if a error occured in the server;
      *
      * @async
      * @static
@@ -22,20 +29,27 @@ class ConversationController {
      */
     static async index(req, res) {
         try {
-            const { page = 1 } = req.query;
+            /* Pagination number and limit*/
+            const page = Number(req.query.page) || 1;
+            const limit = Number(process.env.PAGINATION_LIMIT);
 
+            /* Query the episodes informations */
             const episodes = await Episode.find(
                 {},
                 { conversations: 1, name: 1, number: 1, season: 1 }
             );
 
+            /*
+             * Query all the conversations and deep populate
+             * the subfields
+             */
             const conversations = await Conversation.paginate(
                 {},
                 {
                     sort: { _id: 1 },
                     select: "_id quotes",
-                    page: Number(page),
-                    limit: 20,
+                    page,
+                    limit,
                     populate: {
                         sort: { _id: 1 },
                         path: "quotes",
@@ -50,34 +64,43 @@ class ConversationController {
                     },
                 }
             );
-            const result = {};
-            result.limit = conversations.limit;
-            result.page = conversations.page;
-            result.pages = conversations.pages;
-            result.total = conversations.total;
 
-            result.conversations = conversations.docs.map((conv) => {
-                const retObj = {};
-                const epObj = {};
+            /* returns the conversations, if any */
+            if (conversations.total !== 0) {
+                const responseObject = {
+                    limit: conversations.limit,
+                    page: conversations.page,
+                    pages: conversations.pages,
+                    total: conversations.total,
+                    status: "ok",
+                };
 
-                retObj._id = conv._id;
-                retObj.quotes = conv.quotes;
+                /* Appends episode information to the conversations */
+                responseObject.result = conversations.docs.map((conv) => {
+                    const conversationObj = {
+                        _id: conv._id,
+                        quotes: conv.quotes,
+                    };
+                    const episodeObj = {};
 
-                for (const ep of episodes) {
-                    if (ep.conversations.includes(conv._id)) {
-                        epObj.name = ep.name;
-                        epObj.number = ep.number;
-                        epObj.season = ep.season;
+                    for (const ep of episodes) {
+                        if (ep.conversations.includes(conv._id)) {
+                            episodeObj.name = ep.name;
+                            episodeObj.number = ep.number;
+                            episodeObj.season = ep.season;
 
-                        break;
+                            break;
+                        }
                     }
-                }
-                retObj.episode = epObj;
+                    conversationObj.episode = episodeObj;
 
-                return retObj;
-            });
+                    return conversationObj;
+                });
 
-            return await res.status(200).json({ status: "ok", result });
+                return await res.status(200).json(responseObject);
+            } else {
+                return res.status(400).json({ status: "not found" });
+            }
         } catch (error) {
             console.error(`Error on listing characters: ${error.message}`);
             return res.status(500).json({ status: "error" });
@@ -85,16 +108,25 @@ class ConversationController {
     }
 
     /**
-     * Conversation searching by names, quote content, episodes and seasons,
+     * Conversation searching by the parameters:
      *
-     * The seasons array will match all conversations which is in any of the 
-     * seasons in the array.
-     * The episodes array will match all conversations  which is in any of 
-     * the episodes in the array.
-     * The names array will match all conversations which has a quote that 
-     * character name match any of the regexes in the array names(names[i] => /names[i]/i).
-     * The quotes array will match all conversations which has a quote that 
-     * content match any of the regexes in the array quotes(quotes[i] => /quotes[i]/i).
+     * req.query.seasons: Array containing a list of integers, will match all conversations
+     * which is in any of the seasons in the array.
+     * req.query.episodes: Array containing a list of integers, will match all conversations
+     * which is in any of the episodes in the array.
+     * req.query.names: Array containing a list of strings, will match all conversations
+     * which has a quote that character name match any of the regexes in the array
+     * names (names[i] => /names[i]/i).
+     * req.query.quotes : Array containing a list of strings, will match all conversations
+     * which has a quote that content match any of the regexes in the array
+     * quotes(quotes[i] => /quotes[i]/i).
+     *
+     * returns a document with a fields:
+     *
+     * result: the conversations;
+     * status: "ok" if any conversations has returned,
+     * "not found" if no conversations returned or
+     * "error" if a error occured in the server (for example a invalid query string);
      *
      * @async
      * @static
@@ -106,45 +138,56 @@ class ConversationController {
      */
     static async search(req, res) {
         try {
-            const { page = 1, seasons, episodes, names, quotes } = req.query;
+            /* Pagination number and limit */
+            const page = Number(req.query.page) || 1;
+            const limit = Number(process.env.PAGINATION_LIMIT);
 
-            /* The collections queries initialy all empty,
-             * so will match all conversations  */
+            /*
+             * The collections queries initialy all empty,
+             * so will match all conversations
+             */
             const episodeQuery = {};
             const characterQuery = {};
             const quoteQuery = {};
             const conversationQuery = {};
 
             /* If search parameters are present, narrows the queries */
-            if (seasons) {
-                seasons.forEach((season, index) => {
-                    seasons[index] = Number(season);
+            if (req.query.seasons) {
+                const seasons = Array(req.query.seasons).flat(1);
+                seasons.forEach((s, i) => {
+                    seasons[i] = Number(s);
                 });
                 episodeQuery.season = { $in: seasons };
             }
 
-            if (episodes) {
-                episodes.forEach((ep, index) => {
-                    episodes[index] = Number(ep);
+            if (req.query.episodes) {
+                const episodes = Array(req.query.episodes).flat(1);
+                episodes.forEach((e, i) => {
+                    episodes[i] = Number(e);
                 });
                 episodeQuery.number = { $in: episodes };
             }
 
-            if (names) {
-                names.forEach((name, index) => {
-                    names[index] = new RegExp(name, "i");
+            if (req.query.names) {
+                const names = Array(req.query.names).flat(1);
+                names.forEach((n, i) => {
+                    names[i] = new RegExp(n, "i");
                 });
                 characterQuery.name = { $in: names };
             }
 
-            if (quotes) {
-                quotes.forEach((quote, index) => {
-                    quotes[index] = new RegExp(quote, "i");
+            if (req.query.quotes) {
+                const quotes = Array(req.query.quotes).flat(1);
+                quotes.forEach((q, i) => {
+                    quotes[i] = new RegExp(q, "i");
                 });
                 quoteQuery.quote = { $in: quotes };
             }
 
-            /* Scary hack to narrow the conversations to the search parameters */
+            /*
+             * NOTE: Future me, This is slow garbage,
+             * instead use the mongo aggregation framework
+             */
             const charactersMatched = await Character.find(characterQuery, {
                 _id: 1,
             });
@@ -176,8 +219,8 @@ class ConversationController {
                 {
                     sort: { _id: 1 },
                     select: "_id quotes",
-                    page: Number(page),
-                    limit: 20,
+                    page,
+                    limit,
                     populate: {
                         sort: { _id: 1 },
                         path: "quotes",
@@ -193,35 +236,42 @@ class ConversationController {
                 }
             );
 
-            const result = {};
-            result.limit = conversations.limit;
-            result.page = conversations.page;
-            result.pages = conversations.pages;
-            result.total = conversations.total;
+            /* returns the conversations, if any */
+            if (conversations.total !== 0) {
+                const responseObject = {
+                    limit: conversations.limit,
+                    page: conversations.page,
+                    pages: conversations.pages,
+                    total: conversations.total,
+                    status: "ok",
+                };
 
-            /* Other hack to append episode information to the quotes*/
-            result.conversations = conversations.docs.map((conv) => {
-                const retObj = {};
-                const epObj = {};
+                /* Appends episode information to the conversations */
+                responseObject.result = conversations.docs.map((conv) => {
+                    const conversationObj = {};
+                    const episodeObj = {};
 
-                retObj._id = conv._id;
-                retObj.quotes = conv.quotes;
+                    conversationObj._id = conv._id;
+                    conversationObj.quotes = conv.quotes;
 
-                for (const ep of episodesMatched) {
-                    if (ep.conversations.includes(conv._id)) {
-                        epObj.name = ep.name;
-                        epObj.number = ep.number;
-                        epObj.season = ep.season;
+                    for (const ep of episodesMatched) {
+                        if (ep.conversations.includes(conv._id)) {
+                            episodeObj.name = ep.name;
+                            episodeObj.number = ep.number;
+                            episodeObj.season = ep.season;
 
-                        break;
+                            break;
+                        }
                     }
-                }
-                retObj.episode = epObj;
+                    conversationObj.episode = episodeObj;
 
-                return retObj;
-            });
+                    return conversationObj;
+                });
 
-            return await res.status(200).json({ status: "ok", result });
+                return await res.status(200).json(responseObject);
+            } else {
+                return res.status(400).json({ status: "not found" });
+            }
         } catch (error) {
             console.error(`Error on listing characters: ${error.message}`);
             return res.status(500).json({ status: "error" });
@@ -229,8 +279,12 @@ class ConversationController {
     }
 
     /**
-     * Individual Conversation listing by id, returns a json with
-     * the conversation in result.conversation.
+     * Individual Conversation listing by id, returns a document wit the fields:
+     *
+     * result: the conversations in the current page;
+     * status: "ok" if a conversation has returned,
+     * "not found" if no conversation returned or
+     * "error" if a error occured in the server;
      *
      * @async
      * @static
@@ -243,6 +297,7 @@ class ConversationController {
         try {
             const _id = String(req.params.id);
 
+            /* Query the conversation */
             const conversation = await Conversation.findOne(
                 { _id },
                 { _id: 1, quotes: 1 }
@@ -257,19 +312,31 @@ class ConversationController {
                 },
             });
 
+            /* Query the episode of the conversation */
             const episode = await Episode.findOne(
                 { conversations: _id },
                 { _id: 0, number: 1, season: 1, name: 1 }
             );
 
-            if (conversation && episode) {
-                const conv = {};
-                conv._id = conversation._id;
-                conv.episode = episode;
-                conv.quotes = conversation.quotes;
-                const result = conv;
+            /* returns the conversation, if found */
+            if (conversation) {
+                conversation.episode = {
+                    name: episode.name,
+                    season: episode.season,
+                    number: episode.number,
+                };
 
-                return await res.status(200).json({ status: "ok", result });
+                const responseObject = {
+                    result: {
+                        _id: conversation._id,
+                        quotes: conversation.quotes,
+                        episode: conversation.episode,
+                    },
+
+                    status: "ok",
+                };
+
+                return await res.status(200).json(responseObject);
             } else {
                 return res.status(400).json({ status: "not found" });
             }
@@ -280,7 +347,12 @@ class ConversationController {
     }
 
     /**
-     * Returns a random conversation.
+     * Returns a document with the fields:
+     *
+     * result: a random conversation;
+     * status: "ok" if the conversation has returned,
+     * "not found" if no conversation returned or
+     * "error" if a error occured in the server;
      *
      * @async
      * @static
@@ -291,9 +363,12 @@ class ConversationController {
      */
     static async random(req, res) {
         try {
+            /* Total number of conversations */
             const size = await Conversation.countDocuments();
+            /* random number in the interval [0, size) */
             const rnd = Math.floor(Math.random() * size);
 
+            /* Query a random conversation */
             const conversation = await Conversation.findOne(
                 {},
                 {
@@ -313,11 +388,13 @@ class ConversationController {
                     },
                 });
 
+            /* Returns the conversation, if found */
             if (conversation) {
-                return res.status(200).json({
+                const responseObject = {
+                    result: conversation,
                     status: "ok",
-                    result: { conversation },
-                });
+                };
+                return res.status(200).json(responseObject);
             } else {
                 return res.status(400).json({ status: "not found" });
             }

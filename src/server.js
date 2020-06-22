@@ -1,3 +1,9 @@
+/* env vars */
+if (process.env.NODE_ENV != "production") {
+    require("dotenv").config();
+}
+
+/* Modules */
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");

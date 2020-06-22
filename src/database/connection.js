@@ -1,8 +1,3 @@
-/* env vars */
-if (process.env.NODE_ENV != "production") {
-    require("dotenv").config();
-}
-
 const mongoose = require("mongoose");
 
 mongoose.connect(process.env.DB_URI, {
@@ -13,7 +8,7 @@ mongoose.connect(process.env.DB_URI, {
 
 /* logs */
 mongoose.connection.on("connected", () => {
-    console.log(`Mongoose connection is open to ${process.env.DB_URI}`);
+    console.log("Mongoose connection is open");
 });
 
 mongoose.connection.on("error", (err) => {
