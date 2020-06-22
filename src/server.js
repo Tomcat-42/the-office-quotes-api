@@ -25,6 +25,11 @@ app.use(express.json());
 
 /* Routes */
 
+/* Default root route */
+app.get("/", (req, res) => { 
+    return res.status(200).json({status: "ok", result: "Yesh"});
+});
+
 /**
  * Characters routes.
  * @name characters/
