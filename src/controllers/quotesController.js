@@ -4,13 +4,13 @@ const Episode = require("../models/Episode");
 const Character = require("../models/Character");
 
 /**
- * Conversation Controller Class
- * @class ConversationController
+ * Quote Controller Class
+ * @class QuoteController
  */
-class ConversationController {
+class QuoteController {
     /**
-     * Conversations Index, returns a document with a field "result" containing: 
-     * the conversations, the total number of characters, total number of pages,
+     * Quotes Index, returns a document with a field "result" containing:
+     * the quotes, the total number of quotes, total number of pages,
      * current page and the total number of documents in the current page.
      *
      * @async
@@ -27,55 +27,61 @@ class ConversationController {
             const episodes = await Episode.find(
                 {},
                 { conversations: 1, name: 1, number: 1, season: 1 }
-            );
+            ).populate({
+                path: "conversations",
+                model: "Conversation",
+                select: "quotes",
+            });
 
-            const conversations = await Conversation.paginate(
+            const quotes = await Quote.paginate(
                 {},
                 {
                     sort: { _id: 1 },
-                    select: "_id quotes",
+                    select: "_id quote character",
                     page: Number(page),
                     limit: 20,
                     populate: {
-                        sort: { _id: 1 },
-                        path: "quotes",
-                        model: "Quote",
-                        select: "_id quote",
-                        populate: {
-                            sort: { _id: 1 },
-                            path: "character",
-                            model: "Character",
-                            select: "_id name",
-                        },
+                        path: "character",
+                        model: "Character",
+                        select: "_id name",
                     },
                 }
             );
-            const result = {};
-            result.limit = conversations.limit;
-            result.page = conversations.page;
-            result.pages = conversations.pages;
-            result.total = conversations.total;
 
-            result.conversations = conversations.docs.map((conv) => {
+            const result = {};
+
+            result.quotes = quotes.docs.map((quote) => {
                 const retObj = {};
                 const epObj = {};
 
-                retObj._id = conv._id;
-                retObj.quotes = conv.quotes;
+                retObj._id = quote._id;
+                retObj.character = quote.character;
+                retObj.quote = quote.quote;
 
+                /* NOTE: not nice */
+                let breakFlag = false;
                 for (const ep of episodes) {
-                    if (ep.conversations.includes(conv._id)) {
-                        epObj.name = ep.name;
-                        epObj.number = ep.number;
-                        epObj.season = ep.season;
+                    for (const conv of ep.conversations)
+                        if (conv.quotes.includes(quote._id)) {
+                            epObj.name = ep.name;
+                            epObj.number = ep.number;
+                            epObj.season = ep.season;
 
-                        break;
-                    }
+                            breakFlag = true;
+
+                            break;
+                        }
+                    if (breakFlag) break;
                 }
                 retObj.episode = epObj;
 
                 return retObj;
             });
+
+            result.limit = quotes.limit;
+            result.page = quotes.page;
+            result.pages = quotes.pages;
+            result.total = quotes.total;
 
             return await res.status(200).json({ status: "ok", result });
         } catch (error) {
@@ -85,23 +91,23 @@ class ConversationController {
     }
 
     /**
-     * Conversation searching by names, quote content, episodes and seasons,
+     * Quotes searching by names, quote content, episodes and seasons,
      *
-     * The seasons array will match all conversations which is in any of the 
+     * The seasons array will match all quotes which is in any of the
      * seasons in the array.
-     * The episodes array will match all conversations  which is in any of 
+     * The episodes array will match all quotes which is in any of
      * the episodes in the array.
-     * The names array will match all conversations which has a quote that 
-     * character name match any of the regexes in the array names(names[i] => /names[i]/i).
-     * The quotes array will match all conversations which has a quote that 
-     * content match any of the regexes in the array quotes(quotes[i] => /quotes[i]/i).
+     * The names array will match all quotes that the character name
+     * match any of the regexes in the array names(names[i] => /names[i]/i).
+     * The quotes array will match all quotes which content match
+     * any of the regexes in the array quotes(quotes[i] => /quotes[i]/i).
      *
      * @async
      * @static
      * @method
      * @param {Request} req - req.query.names, req.body.quotes, req.body.seasons
      * and req.body.episodes arrays contains the parameters used for searching;
-     * @param {Response} res - the body is a JSON with the information to be returned
+     * @param {Response} res - the body is a JSON with the information to be returned;
      * @returns {Response}
      */
     static async search(req, res) {
@@ -109,7 +115,7 @@ class ConversationController {
             const { page = 1, seasons, episodes, names, quotes } = req.query;
 
             /* The collections queries initialy all empty,
-             * so will match all conversations  */
+             * so will match all quotes */
             const episodeQuery = {};
             const characterQuery = {};
             const quoteQuery = {};
@@ -164,62 +170,64 @@ class ConversationController {
                 name: 1,
                 number: 1,
                 season: 1,
+            }).populate({
+                path: "conversations",
+                model: "Conversation",
+                select: "quotes",
             });
-            const episodesMatchedConversations = episodesMatched.flatMap(
-                (ep) => ep.conversations
-            );
-            conversationQuery._id = { $in: episodesMatchedConversations };
 
-            /* query the conversations that matches the search parameters */
-            const conversations = await Conversation.paginate(
-                conversationQuery,
-                {
-                    sort: { _id: 1 },
-                    select: "_id quotes",
-                    page: Number(page),
-                    limit: 20,
-                    populate: {
-                        sort: { _id: 1 },
-                        path: "quotes",
-                        model: "Quote",
-                        select: "_id quote",
-                        populate: {
-                            sort: { _id: 1 },
-                            path: "character",
-                            model: "Character",
-                            select: "_id name",
-                        },
-                    },
-                }
+            const episodesMatchedQuotes = episodesMatched.flatMap((ep) =>
+                ep.conversations.flatMap((conv) => conv.quotes)
             );
+
+            quoteQuery._id = { $in: episodesMatchedQuotes };
+
+            const quotesSearch = await Quote.paginate(quoteQuery, {
+                sort: { _id: 1 },
+                select: "_id quote character",
+                page: Number(page),
+                limit: 20,
+                populate: {
+                    path: "character",
+                    model: "Character",
+                    select: "_id name",
+                },
+            });
 
             const result = {};
-            result.limit = conversations.limit;
-            result.page = conversations.page;
-            result.pages = conversations.pages;
-            result.total = conversations.total;
 
-            /* Other hack to append episode information to the quotes*/
-            result.conversations = conversations.docs.map((conv) => {
+            result.quotes = quotesSearch.docs.map((quote) => {
                 const retObj = {};
                 const epObj = {};
 
-                retObj._id = conv._id;
-                retObj.quotes = conv.quotes;
+                retObj._id = quote._id;
+                retObj.character = quote.character;
+                retObj.quote = quote.quote;
 
+                /* NOTE: not nice */
+                let breakFlag = false;
                 for (const ep of episodesMatched) {
-                    if (ep.conversations.includes(conv._id)) {
-                        epObj.name = ep.name;
-                        epObj.number = ep.number;
-                        epObj.season = ep.season;
+                    for (const conv of ep.conversations)
+                        if (conv.quotes.includes(quote._id)) {
+                            epObj.name = ep.name;
+                            epObj.number = ep.number;
+                            epObj.season = ep.season;
 
-                        break;
-                    }
+                            breakFlag = true;
+
+                            break;
+                        }
+                    if (breakFlag) break;
                 }
                 retObj.episode = epObj;
 
                 return retObj;
             });
+
+            result.limit = quotesSearch.limit;
+            result.page = quotesSearch.page;
+            result.pages = quotesSearch.pages;
+            result.total = quotesSearch.total;
 
             return await res.status(200).json({ status: "ok", result });
         } catch (error) {
@@ -229,7 +237,7 @@ class ConversationController {
     }
 
     /**
-     * Individual Conversation listing by id, returns a json with
+     * Individual Quote listing by id, returns a json with
      * the conversation in result.conversation.
      *
      * @async
@@ -243,33 +251,48 @@ class ConversationController {
         try {
             const _id = String(req.params.id);
 
-            const conversation = await Conversation.findOne(
+            const quote = await Quote.findOne(
                 { _id },
-                { _id: 1, quotes: 1 }
+                { _id: 1, character: 1, quote: 1 }
             ).populate({
-                path: "quotes",
-                model: "Quote",
-                select: "_id quote",
-                populate: {
-                    path: "character",
-                    model: "Character",
-                    select: "_id name",
-                },
+                path: "character",
+                model: "Character",
+                select: "_id name",
             });
 
-            const episode = await Episode.findOne(
-                { conversations: _id },
-                { _id: 0, number: 1, season: 1, name: 1 }
+            const conversation = await Conversation.findOne(
+                { quotes: { _id } },
+                { _id: 1 }
             );
 
-            if (conversation && episode) {
-                const conv = {};
-                conv._id = conversation._id;
-                conv.episode = episode;
-                conv.quotes = conversation.quotes;
-                const result = conv;
+            const episode = await Episode.findOne({
+                conversations: { _id: conversation._id },
+            });
 
-                return await res.status(200).json({ status: "ok", result });
+            // const episode = await Episode.aggregate([
+            //     {
+            //         $lookup: {
+            //             from: "conversations",
+            //             localField: "conversations",
+            //             foreignField: "_id",
+            //             as: "conversations",
+            //         },
+            //     },
+            //     { $match: { conversations: { $elemMatch: { quotes: _id } } } },
+            // ]);
+
+            if (quote && episode) {
+                const q = {};
+                q._id = quote._id;
+                q.episode = {
+                    name: episode.name,
+                    season: episode.season,
+                    number: episode.number,
+                };
+                q.quote = quote.quote;
+                q.character = quote.character;
+
+                return await res.status(200).json({ status: "ok", result: q });
             } else {
                 return res.status(400).json({ status: "not found" });
             }
@@ -280,7 +303,7 @@ class ConversationController {
     }
 
     /**
-     * Returns a random conversation.
+     * Returns a random quote.
      *
      * @async
      * @static
@@ -291,32 +314,47 @@ class ConversationController {
      */
     static async random(req, res) {
         try {
-            const size = await Conversation.countDocuments();
+            const size = await Quote.countDocuments();
             const rnd = Math.floor(Math.random() * size);
 
-            const conversation = await Conversation.findOne(
+            const quote = await Quote.findOne(
                 {},
                 {
                     _id: 1,
-                    quotes: 1,
+                    quote: 1,
+                    character: 1,
                 }
             )
                 .skip(rnd)
                 .populate({
-                    path: "quotes",
-                    model: "Quote",
-                    select: "_id quote",
-                    populate: {
-                        path: "character",
-                        model: "Character",
-                        select: "_id name",
-                    },
+                    path: "character",
+                    model: "Character",
+                    select: "_id name",
                 });
 
-            if (conversation) {
+            const conversation = await Conversation.findOne(
+                { quotes: quote._id },
+                { _id: 1 }
+            );
+
+            const episode = await Episode.findOne({
+                conversations: { _id: conversation._id },
+            });
+
+            if (quote && episode) {
+                const q = {};
+                q._id = quote._id;
+                q.episode = {
+                    name: episode.name,
+                    season: episode.season,
+                    number: episode.number,
+                };
+                q.quote = quote.quote;
+                q.character = quote.character;
+
                 return res.status(200).json({
                     status: "ok",
-                    result: { conversation },
+                    result: { "quote": q },
                 });
             } else {
                 return res.status(400).json({ status: "not found" });
@@ -328,4 +366,4 @@ class ConversationController {
     }
 }
 
-module.exports = ConversationController;
+module.exports = QuoteController;
