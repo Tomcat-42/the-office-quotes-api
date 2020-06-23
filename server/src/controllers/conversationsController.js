@@ -387,13 +387,30 @@ class ConversationController {
                         select: "_id name",
                     },
                 });
+            
+            /* Other queries to append episode information */
+            const episode = await Episode.findOne({
+                conversations: { _id: conversation._id },
+            });
 
             /* Returns the conversation, if found */
-            if (conversation) {
+            if (conversation && episode) {
+                conversation.episode = {
+                    name: episode.name,
+                    season: episode.season,
+                    number: episode.number,
+                };
+
                 const responseObject = {
-                    result: conversation,
+                    result: {
+                        _id: conversation._id,
+                        quotes: conversation.quotes,
+                        episode: conversation.episode,
+                    },
+
                     status: "ok",
                 };
+
                 return res.status(200).json(responseObject);
             } else {
                 return res.status(400).json({ status: "not found" });
