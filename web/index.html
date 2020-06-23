@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt">
+    <head>
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, shrink-to-fit=no"
+            charset="utf-8"
+        />
+        <meta name="author" content="Pablo Hugen" />
+        <meta
+            name="description"
+            content="Get a radom quote from the show The Office"
+        />
+
+        <!-- Bootstrap CSS -->
+        <link rel="stylesheet" href="./styles/bootstrap.min.css" />
+
+        <!-- Font Awesome Kit -->
+        <script src="./scripts/font-awesome.js"></script>
+
+        <!-- doc CSS -->
+        <link href="./styles/global.css" rel="stylesheet" type="text/css" />
+
+        <title>The Office random quotes</title>
+    </head>
+    <body>
+        <header>
+            <div class="jumbotron mainJumbotron dark">
+                <h1 class="display-6">
+                    <span class="jumbotronTitle">The Office random quotes</span>
+                </h1>
+                <p class="lead">
+                    See the API on github:
+                    <a href="https://github.com/Tomcat-42/the-office-quotes-api"
+                        ><i class="fab fa-github-alt"></i
+                    ></a>
+                </p>
+            </div>
+        </header>
+        <main>
+            <div class="offset-1 col-10 pt-3">
+                <div class="card app">
+                    <div class="card-header">
+                        <form class="quoteForm">
+                            <div
+                                class="btn-group btn-group-toggle"
+                                data-toggle="buttons"
+                            >
+                                <label class="btn btn-secondary active">
+                                    <input
+                                        type="radio"
+                                        name="quote"
+                                        id="quote"
+                                        value="quotes"
+                                        checked
+                                    />
+                                    quote
+                                </label>
+                                <label class="btn btn-secondary">
+                                    <input
+                                        type="radio"
+                                        name="quote"
+                                        id="conversation"
+                                        value="conversations"
+                                    />
+                                    conversation
+                                </label>
+                            </div>
+                            <button
+                                type="submit"
+                                class="btn btn-dark float-right"
+                            >
+                                <i class="fas fa-comments"> Get</i>
+                            </button>
+                        </form>
+                    </div>
+                    <div class="card-body" hidden>
+                        <div class="row">
+                            <div class="col-md-4 my-3">
+                                <img
+                                    src="./images/jim.png"
+                                    class="card-img charImg"
+                                />
+                            </div>
+                            <div class="col-md-8">
+                                <div class="row">
+                                    <div class="container my-3">
+                                        <h2 class="episodeInfo float-left">
+                                            s01e01 - "Pilot"
+                                        </h2>
+                                        <button
+                                            class="copyButton btn btn-secondary float-right p-2"
+                                        >
+                                            <i class="fas fa-copy"> copy</i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <ul class="list-group mx-0 quoteList"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div
+                class="appAlert alert alert-dark alert-dismissible fade show"
+                role="alert"
+                hidden
+            >
+                <span> failed to request quote(s)</span>
+                <button
+                    type="button"
+                    class="close"
+                    data-dismiss="alert"
+                    aria-label="Close"
+                >
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        </footer>
+
+        <!-- jQuery JS -->
+        <script src="./scripts/jquery-3.4.1.min.js"></script>
+
+        <!-- Bootstrap JS -->
+        <script src="./scripts/bootstrap.min.js"></script>
+
+        <!-- Popper.js JS -->
+        <script src="./scripts/popper.min.js"></script>
+
+        <!-- doc JS -->
+        <script src="./scripts/app.js" type="text/javascript"></script>
+    </body>
+</html>
