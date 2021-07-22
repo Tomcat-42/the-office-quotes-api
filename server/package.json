@@ -1,40 +1,18 @@
 {
-  "name": "the-office-quotes-api",
-  "version": "1.0.0",
-  "description": "REST API for requesting quotes from The Office Us",
-  "main": "src/server.js",
-  "scripts": {
-    "dev": "npx nodemon src/server.js",
-    "doc": "npx jsdoc -r src/ -d doc/"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Tomcat-42/the-office-quotes-api.git"
-  },
-  "keywords": [
-    "the",
-    "office",
-    "quotes",
-    "api"
-  ],
-  "author": "Pablo Hugen",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/Tomcat-42/the-office-quotes-api/issues"
-  },
-  "homepage": "https://github.com/Tomcat-42/the-office-quotes-api#readme",
-  "devDependencies": {
-    "eslint": "^7.2.0",
-    "prettier": "^2.0.5"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^8.2.0",
-    "express": "^4.17.1",
-    "helmet": "^3.23.1",
-    "jsdoc": "^3.6.4",
-    "mongoose": "^5.9.19",
-    "mongoose-paginate": "^5.0.3",
-    "nodemon": "^2.0.4"
-  }
+   "name": "server",
+   "version": "0.0.1",
+   "description": "Awesome project developed with TypeORM.",
+   "devDependencies": {
+      "@types/node": "^8.0.29",
+      "ts-node": "3.3.0",
+      "typescript": "3.3.3333"
+   },
+   "dependencies": {
+      "pg": "^8.4.0",
+      "reflect-metadata": "^0.1.10",
+      "typeorm": "^0.2.34"
+   },
+   "scripts": {
+      "start": "ts-node src/index.ts"
+   }
 }
