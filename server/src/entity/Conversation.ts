@@ -5,14 +5,14 @@ import {
     OneToMany,
     JoinColumn,
 } from "typeorm";
-import { Quotes } from "./Quotes";
+import { Quote } from "./Quote";
 
 @Entity()
-export class Conversations {
+export class Conversation {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @OneToMany((type) => Quotes, (quotes) => quotes.quotes)
+    @OneToMany((type) => Quote, (quote) => quote.quote)
     @JoinColumn()
-    quotes: Quotes[];
+    quotes: Quote[];
 }

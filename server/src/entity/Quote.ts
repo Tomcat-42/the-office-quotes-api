@@ -2,20 +2,20 @@ import {
     Entity,
     PrimaryGeneratedColumn,
     OneToOne,
-    JoinTable,
+    JoinColumn,
     Column,
 } from "typeorm";
-import { Characters } from "./Characters";
+import { Character } from "./Character";
 
 @Entity()
-export class Quotes {
+export class Quote {
     @PrimaryGeneratedColumn()
     id: number;
 
     @Column()
-    quotes: string;
+    quote: string;
 
-    @OneToOne((type) => Characters)
+    @OneToOne((type) => Character, (character) => character.id)
     @JoinColumn({ name: "character" })
-    character: Characters;
+    character: Character;
 }
